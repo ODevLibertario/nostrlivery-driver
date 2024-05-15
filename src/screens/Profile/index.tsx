@@ -7,15 +7,12 @@ import { ActionButton } from "@components/ActionButton"
 import { StorageService, StoredKey } from "@service/StorageService"
 import { NodeService } from "@service/NodeService"
 import { NostrService } from "@service/NostrService"
-import { isValidLatitude, isValidLongitude } from "@util/validationUtils"
-import { getLocation } from "@util/geolocation"
 import {SelectInput} from "@components/SelectInput"
 
 export const ProfileScreen = ({ navigation }: any) => {
     const [profile, setProfile] = useState<any>({})
     const [nodeUrl, setNodeUrl] = useState<string>("")
-    const [latitude, setLatitude] = useState<string>("")
-    const [longitude, setLongitude] = useState<string>("")
+    const [paymentRate, setPaymentRate] = useState<string>("")
     const [disabledNodeUrlBtn, setDisabledNodeUrlBtn] = useState<boolean>(true)
     const storageService = new StorageService()
     const nodeService = new NodeService()
@@ -34,8 +31,7 @@ export const ProfileScreen = ({ navigation }: any) => {
                 navigation.navigate("Login")
             }
             setProfile(data)
-            setLongitude(data.location.longitude)
-            setLatitude(data.location.latitude)
+            setPaymentRate(data.paymentRate)
         })
     }, [])
 
@@ -48,17 +44,6 @@ export const ProfileScreen = ({ navigation }: any) => {
             }
         })
     }, [nodeUrl])
-
-    function handleAutofillLocation() {
-        getLocation().then(location => {
-            if (location?.coords) {
-                const { latitude, longitude } = location?.coords
-
-                setLatitude(latitude.toString())
-                setLongitude(longitude.toString())
-            }
-        })
-    }
 
     function navigateToHome() {
         navigation.navigate("Home")
@@ -82,47 +67,6 @@ export const ProfileScreen = ({ navigation }: any) => {
                     text1: e,
                 })
             })
-    }
-
-    function handleUpdateLocation() {
-        if (!isValidLatitude(latitude)) {
-            Toast.show({
-                type: "error",
-                text1: "Invalid latitude",
-            })
-            return
-        }
-
-        if (!isValidLongitude(longitude)) {
-            Toast.show({
-                type: "error",
-                text1: "Invalid longitude",
-            })
-            return
-        }
-
-        const profileWithLocation = { ...profile, location: { latitude, longitude } }
-
-        storageService.get(StoredKey.NSEC).then(async nsec => {
-            const profileUpdateEvent = nostrService.signNostrEvent(nsec, 0, [], profileWithLocation)
-            const event = nostrService.signNostrliveryEvent(nsec, "PUBLISH_EVENT", { event: profileUpdateEvent })
-
-            try {
-                await nodeService.postEvent(event)
-                await storageService.set(StoredKey.PROFILE, profileWithLocation)
-                Toast.show({
-                    type: "success",
-                    text1: "Location updated",
-                })
-            } catch (e) {
-                console.log(e)
-            }
-        }).catch((e) => {
-            Toast.show({
-                type: "error",
-                text1: e,
-            })
-        })
     }
 
     function handleUpdateCurrency(currency: string) {
@@ -150,10 +94,39 @@ export const ProfileScreen = ({ navigation }: any) => {
         })
     }
 
+    function handleUpdatePaymentRate() {
+        const profileWithPaymentRate = {...profile, payment_rate: paymentRate}
+
+        storageService.get(StoredKey.NSEC).then(async nsec => {
+            const profileUpdateEvent = nostrService.signNostrEvent(nsec, 0, [], profileWithPaymentRate)
+            const event = nostrService.signNostrliveryEvent(nsec, "PUBLISH_EVENT", {event: profileUpdateEvent})
+
+            try {
+                await nodeService.postEvent(event)
+                await storageService.set(StoredKey.PROFILE, profileWithPaymentRate)
+                Toast.show({
+                    type: "success",
+                    text1: "Payment rate updated",
+                })
+            } catch (e) {
+                Toast.show({
+                    type: "error",
+                    text1: e,
+                })
+            }
+        })
+    }
+
     function handleLogout() {
         storageService.remove(StoredKey.PROFILE).then()
         storageService.remove(StoredKey.NSEC).then()
         navigation.navigate("Login")
+    }
+
+    function handlePaymentInputChange(value: string) {
+        value = Number(value.replace(/[^\d]/g, "").padStart(3, "0").replace(/(\d+)(\d{2})$/g, '$1.$2')).toFixed(2)
+
+        setPaymentRate(value)
     }
 
     return (
@@ -202,28 +175,6 @@ export const ProfileScreen = ({ navigation }: any) => {
                 />
             </View>
             <View>
-                <Text style={{ fontSize: 16, marginBottom: "2%" }}>Location</Text>
-                {Platform.OS === 'android' && <ActionButton title={"Autofill Location"} color={"purple"} onPress={handleAutofillLocation} />}
-                <Text style={{ fontSize: 16 }}>Latitude</Text>
-                <TextInput
-                    style={styles.input}
-                    value={latitude}
-                    keyboardType={"numeric"}
-                    onChangeText={setLatitude}
-                />
-                <Text style={{ fontSize: 16 }}>Longitude</Text>
-                <TextInput
-                    style={styles.input}
-                    value={longitude}
-                    onChangeText={setLongitude}
-                />
-                <ActionButton
-                    title={"Update"}
-                    color={"purple"}
-                    onPress={handleUpdateLocation}
-                />
-            </View>
-            <View>
                 <Text style={{ fontSize: 16 }}>Currency</Text>
                 <SelectInput
                     data={[
@@ -234,6 +185,21 @@ export const ProfileScreen = ({ navigation }: any) => {
                     ]}
                     emptyMessage={"Select your currency"}
                     callback={handleUpdateCurrency}
+                />
+            </View>
+            <View>
+                <Text style={{ fontSize: 16 }}>Payment Rate (per km)</Text>
+                <TextInput
+                    style={styles.input}
+                    value={paymentRate}
+                    onChangeText={handlePaymentInputChange}
+                    keyboardType="numeric"
+                />
+                <ActionButton
+                    disabled={false}
+                    title={"Save"}
+                    color={"purple"}
+                    onPress={handleUpdatePaymentRate}
                 />
             </View>
             <View>

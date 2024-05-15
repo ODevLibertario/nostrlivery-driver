@@ -39,7 +39,7 @@ export class NodeService {
             },
             body: JSON.stringify(event),
         })
-
+        
         if (response.ok) {
             const responseEvent = await response.json()
             const responseNostrEvent = new NostrEvent(responseEvent)
